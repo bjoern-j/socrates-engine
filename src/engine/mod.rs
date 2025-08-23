@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-struct DialogBuilder {
+pub struct DialogBuilder {
     start_node: DialogNodeId,
     nodes: HashMap<DialogNodeId, DialogNode>,
 }
@@ -34,7 +34,7 @@ impl DialogBuilder {
     }
 }
 
-struct Dialog {
+pub struct Dialog {
     start_node: DialogNodeId,
     nodes: HashMap<DialogNodeId, DialogNode>,
 }
@@ -53,7 +53,7 @@ impl Dialog {
     }
 }
 
-struct DialogExecutor<'d> {
+pub struct DialogExecutor<'d> {
     dialog: &'d Dialog,
     current: DialogNodeId,
     path: Vec<(DialogNodeId, usize)>,
@@ -91,7 +91,7 @@ impl<'d> DialogExecutor<'d> {
     }
 }
 
-struct DialogExecChoices<'dd, 'd> {
+pub struct DialogExecChoices<'dd, 'd> {
     parent: &'dd mut DialogExecutor<'d>,
     history: Vec<usize>,
 }
@@ -127,7 +127,7 @@ impl<'dd, 'd> DialogExecChoices<'dd, 'd> {
     }
 }
 
-struct DialogExecChoice<'dd, 'd> {
+pub struct DialogExecChoice<'dd, 'd> {
     link: DialogLink,
     parent: DialogExecChoices<'dd, 'd>,
     index: usize,
@@ -148,10 +148,10 @@ impl<'dd, 'd> DialogExecChoice<'dd, 'd> {
 }
 
 #[derive(PartialEq, Eq, Debug)]
-enum DialogError {}
+pub enum DialogError {}
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
-struct DialogNodeId {
+pub struct DialogNodeId {
     id: String,
 }
 
@@ -164,7 +164,7 @@ where
     }
 }
 
-struct DialogNode {
+pub struct DialogNode {
     id: DialogNodeId,
     text: DialogText,
     links: Vec<DialogLink>,
@@ -194,7 +194,7 @@ impl DialogNode {
 }
 
 #[derive(Clone)]
-struct DialogLink {
+pub struct DialogLink {
     from: DialogNodeId,
     to: DialogNodeId,
     text: DialogText,
@@ -231,13 +231,13 @@ impl DialogLink {
 }
 
 #[derive(PartialEq, Eq, Clone)]
-enum DialogLinkCondition {
+pub enum DialogLinkCondition {
     None,
     OnlyIfNotYetChosen,
 }
 
 #[derive(Clone)]
-enum DialogText {
+pub enum DialogText {
     PlainText(String),
 }
 
