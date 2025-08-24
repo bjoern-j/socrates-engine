@@ -17,6 +17,7 @@ impl DialogBuilder {
     }
 
     pub fn build(self) -> Result<Dialog, DialogError> {
+        validate_links(&self.nodes)?;
         Ok(Dialog {
             start_node: self.start_node,
             nodes: self.nodes,
@@ -34,6 +35,30 @@ impl DialogBuilder {
     }
 }
 
+fn validate_links(nodes: &HashMap<DialogNodeId, DialogNode>) -> Result<(), DialogError> {
+    for (_, node) in nodes {
+        for link in node.links() {
+            let source_exists = nodes.contains_key(link.from());
+            let target_exists = nodes.contains_key(link.to());
+            if !(source_exists && target_exists) {
+                let mut error = LinkErrorInfo {
+                    missing_source: None,
+                    missing_target: None,
+                };
+                if !source_exists {
+                    error.missing_source = Some(link.from().clone())
+                };
+                if !target_exists {
+                    error.missing_target = Some(link.to().clone())
+                };
+                return Err(DialogError::InvalidLink(error));
+            }
+        }
+    }
+    Ok(())
+}
+
+#[derive(Debug)]
 pub struct Dialog {
     start_node: DialogNodeId,
     nodes: HashMap<DialogNodeId, DialogNode>,
@@ -50,6 +75,10 @@ impl Dialog {
 
     pub fn get_node(&self, id: &DialogNodeId) -> &DialogNode {
         self.nodes.get(id).unwrap()
+    }
+
+    pub fn all_nodes(&self) -> impl Iterator<Item = &DialogNode> {
+        self.nodes.iter().map(|(_, node)| node)
     }
 }
 
@@ -148,11 +177,25 @@ impl<'dd, 'd> DialogExecChoice<'dd, 'd> {
 }
 
 #[derive(PartialEq, Eq, Debug)]
-pub enum DialogError {}
+pub enum DialogError {
+    InvalidLink(LinkErrorInfo),
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub struct LinkErrorInfo {
+    pub missing_source: Option<DialogNodeId>,
+    pub missing_target: Option<DialogNodeId>,
+}
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct DialogNodeId {
     id: String,
+}
+
+impl DialogNodeId {
+    pub fn to_string(self) -> String {
+        self.id
+    }
 }
 
 impl<S> From<S> for DialogNodeId
@@ -164,6 +207,7 @@ where
     }
 }
 
+#[derive(Debug)]
 pub struct DialogNode {
     id: DialogNodeId,
     text: DialogText,
@@ -176,6 +220,18 @@ impl DialogNode {
             id: id.into(),
             text: text.into(),
             links: Vec::new(),
+        }
+    }
+
+    pub fn new_with_links(
+        id: impl Into<DialogNodeId>,
+        text: impl Into<DialogText>,
+        links: Vec<DialogLink>,
+    ) -> Self {
+        DialogNode {
+            id: id.into(),
+            text: text.into(),
+            links,
         }
     }
 
@@ -193,7 +249,7 @@ impl DialogNode {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DialogLink {
     from: DialogNodeId,
     to: DialogNodeId,
@@ -230,13 +286,13 @@ impl DialogLink {
     }
 }
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum DialogLinkCondition {
     None,
     OnlyIfNotYetChosen,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum DialogText {
     PlainText(String),
 }
