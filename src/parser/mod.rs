@@ -8,7 +8,7 @@ use nom::IResult;
 use nom::Parser;
 
 #[derive(PartialEq, Eq, Debug)]
-enum DialogParseError<T> {
+pub enum DialogParseError<T> {
     DialogBuildError(engine::DialogError),
     NomError(nom::Err<T>),
 }
@@ -31,7 +31,9 @@ enum Separator {
     Node,
 }
 
-fn parse<'s>(input: &'s str) -> Result<engine::Dialog, DialogParseError<nom::error::Error<&str>>> {
+pub fn parse<'s>(
+    input: &'s str,
+) -> Result<engine::Dialog, DialogParseError<nom::error::Error<&str>>> {
     let (input, node) = parse_node(input)?;
     let (remainder, nodes) = many0(parse_node).parse(input)?;
     println!("{}", remainder);

@@ -1,6 +1,6 @@
 use super::engine;
 
-fn serialize_dialog(dialog: &engine::Dialog) -> String {
+pub fn serialize_dialog(dialog: &engine::Dialog) -> String {
     let mut output = String::new();
     let start_node_id = dialog.start_node().id().clone();
     output.push_str(&serialize_node(dialog.start_node()));

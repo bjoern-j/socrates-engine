@@ -1,3 +1,4 @@
+use super::{parser, writer};
 use std::collections::HashMap;
 
 pub struct DialogBuilder {
@@ -26,11 +27,6 @@ impl DialogBuilder {
 
     pub fn add_node(mut self, node: DialogNode) -> Self {
         self.nodes.insert(node.id().clone(), node);
-        self
-    }
-
-    pub fn add_link(mut self, link: DialogLink) -> Self {
-        self.nodes.get_mut(link.from()).unwrap().add_link(link);
         self
     }
 }
@@ -65,6 +61,16 @@ pub struct Dialog {
 }
 
 impl Dialog {
+    pub fn parse<'s>(
+        input: &'s str,
+    ) -> Result<Dialog, parser::DialogParseError<nom::error::Error<&str>>> {
+        parser::parse(input)
+    }
+
+    pub fn serialize(&self) -> String {
+        writer::serialize_dialog(&self)
+    }
+
     pub fn start_node(&self) -> &DialogNode {
         self.nodes.get(&self.start_node).unwrap()
     }
@@ -126,7 +132,7 @@ pub struct DialogExecChoices<'dd, 'd> {
 }
 
 impl<'dd, 'd> DialogExecChoices<'dd, 'd> {
-    pub fn new(parent: &'dd mut DialogExecutor<'d>, history: Vec<usize>) -> Self {
+    fn new(parent: &'dd mut DialogExecutor<'d>, history: Vec<usize>) -> Self {
         DialogExecChoices { parent, history }
     }
 
@@ -146,7 +152,7 @@ impl<'dd, 'd> DialogExecChoices<'dd, 'd> {
 
     pub fn get(self, index: usize) -> Option<DialogExecChoice<'dd, 'd>> {
         match self.parent.current_node().links.get(index) {
-            Some(link) => Some(DialogExecChoice::new(link.clone(), self, index)),
+            Some(_) => Some(DialogExecChoice::new(self, index)),
             None => None,
         }
     }
@@ -157,18 +163,13 @@ impl<'dd, 'd> DialogExecChoices<'dd, 'd> {
 }
 
 pub struct DialogExecChoice<'dd, 'd> {
-    link: DialogLink,
     parent: DialogExecChoices<'dd, 'd>,
     index: usize,
 }
 
 impl<'dd, 'd> DialogExecChoice<'dd, 'd> {
-    pub fn new(link: DialogLink, parent: DialogExecChoices<'dd, 'd>, index: usize) -> Self {
-        DialogExecChoice {
-            link,
-            parent,
-            index,
-        }
+    fn new(parent: DialogExecChoices<'dd, 'd>, index: usize) -> Self {
+        DialogExecChoice { parent, index }
     }
 
     pub fn choose(self) {
@@ -320,12 +321,15 @@ mod tests {
     #[test]
     fn straight_dialog() {
         let dialog = DialogBuilder::new(DialogNode::new("Start", "Hello, World!"))
-            .add_node(DialogNode::new("Second", "Goodbye, World!"))
-            .add_link(DialogLink::new(
-                "Start",
+            .add_node(DialogNode::new_with_links(
                 "Second",
-                "Hi and bye!",
-                DialogLinkCondition::None,
+                "Goodbye, World!",
+                vec![DialogLink::new(
+                    "Start",
+                    "Second",
+                    "Hi and bye!",
+                    DialogLinkCondition::None,
+                )],
             ))
             .build()
             .unwrap();
@@ -356,29 +360,27 @@ mod tests {
 
     #[test]
     fn branched_dialog() {
-        let dialog = DialogBuilder::new(DialogNode::new("Start", "Hello, World!"))
-            .add_node(DialogNode::new("End", "Goodbye, World!"))
-            .add_node(DialogNode::new("Branch", "Nice to meet you!"))
-            .add_link(DialogLink::new(
-                "Start",
-                "End",
-                "Hi and bye!",
-                DialogLinkCondition::None,
-            ))
-            .add_link(DialogLink::new(
-                "Start",
-                "Branch",
-                "Hi!",
-                DialogLinkCondition::None,
-            ))
-            .add_link(DialogLink::new(
+        let dialog = DialogBuilder::new(DialogNode::new_with_links(
+            "Start",
+            "Hello, World!",
+            vec![
+                DialogLink::new("Start", "End", "Hi and bye!", DialogLinkCondition::None),
+                DialogLink::new("Start", "Branch", "Hi!", DialogLinkCondition::None),
+            ],
+        ))
+        .add_node(DialogNode::new("End", "Goodbye, World!"))
+        .add_node(DialogNode::new_with_links(
+            "Branch",
+            "Nice to meet you!",
+            vec![DialogLink::new(
                 "Branch",
                 "End",
                 "Goodbye",
                 DialogLinkCondition::None,
-            ))
-            .build()
-            .unwrap();
+            )],
+        ))
+        .build()
+        .unwrap();
         let mut dialog_in_progress = dialog.start();
         dialog_in_progress.choices().get(1).unwrap().choose();
         assert_eq!(dialog_in_progress.current_node().id(), &"Branch".into());
@@ -388,35 +390,30 @@ mod tests {
 
     #[test]
     fn cyclic_dialog() {
-        let dialog = DialogBuilder::new(DialogNode::new("Start", "Hello, World!"))
-            .add_node(DialogNode::new("End", "Goodbye, World!"))
-            .add_node(DialogNode::new("Branch", "Nice to meet you!"))
-            .add_link(DialogLink::new(
-                "Start",
-                "End",
-                "Hi and bye!",
-                DialogLinkCondition::None,
-            ))
-            .add_link(DialogLink::new(
-                "Start",
-                "Branch",
-                "Hi!",
-                DialogLinkCondition::OnlyIfNotYetChosen,
-            ))
-            .add_link(DialogLink::new(
-                "Branch",
-                "End",
-                "Goodbye",
-                DialogLinkCondition::None,
-            ))
-            .add_link(DialogLink::new(
-                "Branch",
-                "Start",
-                "Go Back",
-                DialogLinkCondition::None,
-            ))
-            .build()
-            .unwrap();
+        let dialog = DialogBuilder::new(DialogNode::new_with_links(
+            "Start",
+            "Hello, World!",
+            vec![
+                DialogLink::new("Start", "End", "Hi and bye!", DialogLinkCondition::None),
+                DialogLink::new(
+                    "Start",
+                    "Branch",
+                    "Hi!",
+                    DialogLinkCondition::OnlyIfNotYetChosen,
+                ),
+            ],
+        ))
+        .add_node(DialogNode::new("End", "Goodbye, World!"))
+        .add_node(DialogNode::new_with_links(
+            "Branch",
+            "Nice to meet you!",
+            vec![
+                DialogLink::new("Branch", "End", "Goodbye", DialogLinkCondition::None),
+                DialogLink::new("Branch", "Start", "Go Back", DialogLinkCondition::None),
+            ],
+        ))
+        .build()
+        .unwrap();
         let mut dialog_in_progress = dialog.start();
         dialog_in_progress.choices().get(1).unwrap().choose();
         assert_eq!(dialog_in_progress.current_node().id(), &"Branch".into());
